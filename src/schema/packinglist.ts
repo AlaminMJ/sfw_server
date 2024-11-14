@@ -14,15 +14,18 @@ interface IItem {
 
 // Define Carton Type
 interface ICarton {
-  carton_no: string;           // Unique carton number
+  carton_no: number;           // Unique carton number
   measurement: {
     length: number;            // Length of the carton
     width: number;             // Width of the carton
     height: number;            // Height of the carton
+    unit: "CM" | "INCH"
   };
   net_weight: number;          // Net weight of the carton
   gross_weight: number;        // Gross weight of the carton
   style: string;               // Style of the items in the carton
+  customer: string;
+  customer_po:string;
   items: IItem[];              // Array of items inside the carton
 }
 
@@ -59,7 +62,7 @@ const itemSchema = new Schema<IItem>({
 // Mongoose Schema for Carton (subdocument inside Packing List)
 const cartonSchema = new Schema<ICarton>({
   carton_no: {
-    type: String,
+    type: Number,
     required: true,
     unique: true  // Ensure carton numbers are unique
   },
@@ -75,7 +78,12 @@ const cartonSchema = new Schema<ICarton>({
     height: {
       type: Number,
       required: true
+    },
+    unit:{
+      type: String,
+      default:'CM',    
     }
+    
   },
   net_weight: {
     type: Number,
@@ -89,6 +97,10 @@ const cartonSchema = new Schema<ICarton>({
     type: String,
     required: true
   },
+  customer:{
+    type: String
+  },
+  customer_po:{type:String},
   items: [itemSchema]  // Array of items in the carton
 });
 
@@ -104,8 +116,7 @@ const packingListSchema = new Schema<IPackingList>({
     required: true
   },
   buyer_name: {
-    type: String
-    
+    type: String    
   },
   available_sizes: {
     type: [String],  // List of available sizes (e.g., ["Small", "Medium", "Large"])
@@ -113,6 +124,19 @@ const packingListSchema = new Schema<IPackingList>({
   },
   cartons: [cartonSchema]  // Array of carton objects (subdocuments)
 });
+
+// Add custom validation to ensure item sizes are available in the parent Packing List
+cartonSchema.path('items').validate(function (items: IItem[], props: any) {
+  // The 'available_sizes' from the parent document should be passed as 'props'
+  const availableSizes = props.available_sizes; // Passed from parent (PackingList)
+
+  // Validate that each size in the items array is available in the packing list
+  return items.every((item) =>
+    item.sizes.every((size) => availableSizes.includes(size.size_name))
+  );
+}, 'One or more sizes are not available in the packing list');
+
+// Create and export the Carton model
 
 // Create the model for PackingList
 const PackingList = mongoose.model<IPackingList & Document>('PackingList', packingListSchema as Schema);
